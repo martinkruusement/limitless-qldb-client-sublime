@@ -1,0 +1,6 @@
+[
+    {
+        "caption": "Run QLDB Query on current row",
+        "command": "execute_qldb_query"
+    }
+]
