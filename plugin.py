@@ -5,6 +5,11 @@ import threading
 import os
 
 class ExecuteQldbQueryCommand(sublime_plugin.TextCommand):
+    inputs = []
+    placeholder_count = 0
+    
+    # TODO: autorun SELECT queries when can, show results in popup or side tab
+
     def run(self, edit):
         # Attempt to find the project root
         project_root = self.find_project_root()
@@ -24,13 +29,14 @@ class ExecuteQldbQueryCommand(sublime_plugin.TextCommand):
         print(config_ion_path)
 
         self.debug_print_config_ion(config_ion_path)
-
+        
         # Get the first selection (if multiple)
         for region in self.view.sel():
             print("[QLDB Client] Region:")
             print(region)
             
             if region.empty():
+                self.execute_command(selected_text, config_ion_path)
                 print("[QLDB Client] Region empty")
                 print(region)
 
@@ -62,24 +68,27 @@ class ExecuteQldbQueryCommand(sublime_plugin.TextCommand):
         print(command)
 
         try:
+            # TODO: Only show debug output if enabled in settings
             print("[QLDB Client] Initiating qldb shell...")
             print("[QLDB Client] Configuration file:")
             print(config_ion_path)
-            # Start the qldb shell as a subprocess (adjust command as necessary)
-            print("var")
-            print(config_ion_path)
-            print("/Users/martinkruusement/Projektid/mascon/api/config.ion")
-            print("raw")
+
+            # Start the qldb shell
             process = subprocess.Popen(
-                        [
-                            'qldb', 
-                            # '--config', '/Users/martinkruusement/Projektid/mascon/api/config.ion',
-                            '--region', 'ap-southeast-1',
-                            '--ledger', 'mavus0',
-                            '--profile', 'nitram'
-                        ],
-                        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE, universal_newlines=True)
+                [
+                    # TODO: fix bugs loading .ion config from project root
+                    # TODO: Load from settings
+                    # TODO: if config provided, only override --ledger etc when specified in settings and log that this is happening when the config file is also being used
+
+                    'qldb', 
+                    # '--config', 'qldb.config.ion', 
+                    '--ledger', 'DB_NAME', # Database name, for example 'mavus1''
+                    '--region', 'REGION', # AWS Region, for example 'ap-southeast-1'
+                    '--profile', 'PROFILE_NAME' # from: aws sso login --profile PROFILE_NAME 
+                ],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, universal_newlines=True
+            )
 
             print("[QLDB Client] Process:")
             print(process)
@@ -97,14 +106,13 @@ class ExecuteQldbQueryCommand(sublime_plugin.TextCommand):
             print("[QLDB Client] Errors:")
             print(errors)
 
-            # Ensure to close the process
+            # Close qldb shell
             process.stdin.close()
             process.wait()
 
-            qldb_output = "[QLDB]\n" + output
-            # write_to_output_panel(sublime.active_window(), qldb_output)
-            # sublime.active_window().run_command("qldb_output_tab", {"text": qldb_output})
-            sublime.active_window().run_command("open_output_in_new_column", {"text": qldb_output})
+            qldb_output = output
+            print("-------->", command)
+            sublime.active_window().run_command("open_output_in_new_column", {"query": command, "output": qldb_output})
 
             # Print the output and errors to the Sublime Text console
             sublime.set_timeout(lambda: sublime.status_message("Command Output: " + output), 0)
@@ -126,46 +134,27 @@ def plugin_loaded():
     sublime.active_window().run_command("show_panel", {"panel": "console"})
     print("RunQldbCommand plugin loaded. Select a command and run 'run_qldb_command' from the console.")
 
-
-class QldbOutputTabCommand(sublime_plugin.TextCommand):
-    def run(self, edit, text):
-        # Create a new file/tab in the current window
-        new_view = self.view.window().new_file()
-        
-        # Optional: Set syntax for better text formatting (e.g., JSON, XML)
-        # new_view.set_syntax_file('Packages/JavaScript/JSON.sublime-syntax')
-        
-        # Disable editing in the new view
-        new_view.set_read_only(True)
-        
-        # Set the name of the new tab (does not save the file)
-        new_view.set_name("QLDB Output")
-        
-        # Write the text to the new tab
-        new_view.insert(edit, 0, text)
-        
-        # Focus the new tab
-        self.view.window().focus_view(new_view)
-
-
 class OpenOutputInNewColumnCommand(sublime_plugin.WindowCommand):
-    def run(self, text="QLDX"):
-        # The layout setup remains the same as before...
-
-        # After creating the new view and setting it up:
+    def run(self, query="No query", output="No output"):
+        title = "[QLDB] " + repr(query)
         new_view = self.window.new_file()
-        new_view.set_name("QLDB Output")
-        new_view.set_read_only(False)  # Temporarily allow writing
+        new_view.set_scratch(True)
+        new_view.set_read_only(False)
+        new_view.set_name(title)
         new_view.set_syntax_file('Packages/Ion Syntax/Ion.sublime-syntax')
 
-
-        # Move the new view to the desired group (column)
         target_group = len(self.window.get_layout()['cols']) - 2
         self.window.set_view_index(new_view, target_group, 0)
 
-        # Insert the text into the new view
-        # Must be run in the UI thread to avoid API misuse errors
-        sublime.set_timeout_async(lambda: new_view.run_command("append", {"characters": text}), 0)
+        headers = "// [QLDB] \n"
+        headers += "// " + query + '\n'
 
-        # Optionally set the view to read-only after inserting the text
-        # new_view.set_read_only(True)
+        output_lines = output.split('\n')
+        formatted_lines = [("\n// " + line if "documents in bag" in line else line) for line in output_lines]
+        formatted_output = '\n'.join(formatted_lines)
+
+        # Insert the output into the new view
+        # Must be run in the UI thread to avoid API misuse errors
+        sublime.set_timeout_async(lambda: new_view.run_command("append", {"characters": headers}), 0)
+        sublime.set_timeout_async(lambda: new_view.run_command("append", {"characters": formatted_output}), 0)
+        sublime.set_timeout_async(lambda: new_view.set_read_only(True), 0)
