@@ -1,6 +1,6 @@
 [
     {
-        "caption": "Run QLDB Query (selection / row)",
+        "caption": "Run QLDB Query (selection)",
         "command": "execute_qldb_query"
     }
 ]
