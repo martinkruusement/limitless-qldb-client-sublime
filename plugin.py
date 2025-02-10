@@ -4,15 +4,20 @@ import subprocess
 import threading
 import os
 
+print_env = False
+print_welcome = True
+
+
 class ExecuteQldbQueryCommand(sublime_plugin.TextCommand):
     inputs = []
     placeholder_count = 0
-    
+
     # TODO: autorun SELECT queries when can, show results in popup or side tab
 
     def run(self, edit):
         # Attempt to find the project root
         project_root = self.find_project_root()
+
         if not project_root:
             sublime.error_message('Project root not found. Ensure you have a .sublime-project file in your project root.')
             return
@@ -29,12 +34,12 @@ class ExecuteQldbQueryCommand(sublime_plugin.TextCommand):
         print(config_ion_path)
 
         self.debug_print_config_ion(config_ion_path)
-        
+
         # Get the first selection (if multiple)
         for region in self.view.sel():
             print("[QLDB Client] Region:")
             print(region)
-            
+
             if region.empty():
                 self.execute_command(selected_text, config_ion_path)
                 print("[QLDB Client] Region empty")
@@ -43,7 +48,7 @@ class ExecuteQldbQueryCommand(sublime_plugin.TextCommand):
             if not region.empty():
                 # Capture the selected text
                 selected_text = self.view.substr(region)
-                
+
                 if not selected_text.endswith('\n'):
                     selected_text += '\n'
 
@@ -129,10 +134,31 @@ class ExecuteQldbQueryCommand(sublime_plugin.TextCommand):
         except Exception as e:
             print("[QLDB Client] Failed to read config.ion: " + str(e))
 
+        if (print_env):
+            print("\n\n::::::::::::")
+            print("\n\nSublime env:")
+            print(os.environ)
+            print("::::::::::::\n\n")
+
 
 def plugin_loaded():
     sublime.active_window().run_command("show_panel", {"panel": "console"})
-    print("RunQldbCommand plugin loaded. Select a command and run 'run_qldb_command' from the console.")
+
+    if (print_welcome):
+        print()
+        print("  ██████▒░██░    ░██████░▒██████  ")
+        print(" ██▓▒░ ██▒██░    ▒██  ▒██▒██ ░▒██ ")
+        print(" ██▒░  ██▒██▒    ▒██  ▒██▒██████  ")
+        print(" ██▒ ▄▄██▒██▒    ▒██  ▒██▒██ ░▒██ ")
+        print("  ██████▒░███████░██████▒▒██████  ")
+        print("     ▀▀█░  QLDB Client plugin loaded.")
+        print("▒  Highlight/select any PartiQL query and")
+        print("█ > [Run QLDB Query]")
+        print("▒  to forward it to the QLDB shell for immediate execution.")
+        print("░ For CLI based automations:")
+        print("░ subl --command execute_qldb_query")
+        print()
+
 
 class OpenOutputInNewColumnCommand(sublime_plugin.WindowCommand):
     def run(self, query="No query", output="No output"):
